@@ -6,6 +6,7 @@ import datetime
 import requests
 import json
 import time
+import statistics
 from matplotlib import pyplot
 import tkinter as Tkinter
 import tkinter.filedialog as tkFileDialog
@@ -105,36 +106,41 @@ def drug_select():
             print("Found BNF ID of {}".format(drug_id))
             return drug_id,drug_name
         else:
-            OPTIONS=["{} - {}".format(entry["name"],entry["id"]) for entry in json_obj]
-            drug=drop_select(OPTIONS,"Select BNF Name")
-            return drug.split("-")[1].strip(), drug.split("-")[0].strip()
+            #Only allows items that are 'BNF Section' as future JSON search relies on this
+            OPTIONS=["{} _ {}".format(entry["name"],entry["id"]) for entry in json_obj if entry["type"]=="BNF section"]
+            if len(OPTIONS)==1:
+                return OPTIONS[0].split("_")[1].strip(), OPTIONS[0].split("_")[0].strip()
+            elif len(OPTIONS)==0:
+                print("No Valid Items Found")
+            else:
+                drug=drop_select(OPTIONS,"Select BNF Name")
+                return drug.split("_")[1].strip(), drug.split("_")[0].strip()
 
 def plot(practice):
     dates=["-".join(key.split("-")[:2]) for key in data_dict[practice].keys()]
     values=[value["Percentage"] for value in data_dict[practice].values()]
     pyplot.figure(figsize=(20,10))
-    pyplot.title("Percentage of prescriptions that were {} (BNF - {}) for {}".format(bnf_name, bnf_id, practice),fontsize=18)
+    pyplot.title("Percentage of prescriptions that were {} (BNF - {}) for {} ({})".format(bnf_name, bnf_id, practice, practice_dict[practice]),fontsize=18)
     pyplot.ylabel("Percentage")
     pyplot.xlabel("Date")
     pyplot.plot(dates, values)
     #rotates x-axis and otherwise text runs into each other
     pyplot.xticks(rotation=90)
 
-    pyplot.savefig('{} - {} Trend'.format(practice, bnf_name))
+    pyplot.savefig('{} ({}) - {} Trend'.format(practice,practice_dict[practice], bnf_name))
     pyplot.close()
-    print("Graph saved as '{} - {} Trend.png'".format(practice, bnf_name))
+    print("Graph saved as '{} ({}) - {} Trend.png'".format(practice,practice_dict[practice], bnf_name))
     
 #Prompts the user to select a GP Practice and makes a trend plot overtime
 def trends():
     globals()['rootwindow'].withdraw()
     globals()['rootwindow'].quit()
     #Gets a sorted list of options for the dropdown
-    OPTIONS=[GP for GP in data_dict.keys()]
-    practice=drop_select(OPTIONS,"Select GP Practice",True)
+    gps=["{} - {}".format(name,code) for name,code in practice_dict.items()]
+    selected=drop_select(gps,"Select GP Practice", True)
+    practice=selected.split("-")[0].strip()
     if practice=="_ALL_":
-        #removes the _ALL_ option before passing list to plotter, else it tries to plot GP practice called "_ALL_"
-        OPTIONS.remove("_ALL_")
-        for GP in sorted(OPTIONS):
+        for GP in sorted(gps):
             plot(GP)
     else:
         plot(practice)
@@ -154,33 +160,83 @@ def stats_date():
     for GP, dicts in data_dict.items():
         for date, values in data_dict[GP].items():
             if date==selected_date:
-                date_dict[GP]=values
-    values=sorted(date_dict.items(), key=lambda kv:kv[1])
+                date_dict[GP]=values["Percentage"]
+    values=sorted(date_dict.items(), key=lambda kv:kv[1])    
     top_name, top=values[-1][0],values[-1][1]
     low_name, low=values[0][0],values[0][1]
+    total=0
+    for value in values:
+        total+=value[1]
+    stdev=statistics.stdev([value[1] for value in values])    
+    average=total/len(values)
+    lower_lim=average-stdev
+    upper_lim=average+stdev
+    lowers=[]
+    uppers=[]
+    for value in values:
+        if value[1]>upper_lim:
+            uppers+=[value[0]]
+        elif value[1]<lower_lim:
+            lowers+=[value[0]]
     with open("Stats for {} - {} ({}).txt".format(selected_date,bnf_name, bnf_id),"wt") as f:
-        f.write("The Practice with the highest Prescription rate was {} with {}% \n".format(top_name,round(top,2)))
-        f.write("The Practice with the lowest Prescription rate was {} with {}% \n".format(low_name,round(low,2)))
+        f.write("The Practice with the highest Prescription rate was {} ({}) with {}% \n".format(top_name,practice_dict[top_name],round(top,2)))
+        f.write("The Practice with the lowest Prescription rate was {} ({}) with {}% \n".format(low_name,practice_dict[low_name],round(low,2)))
+        if uppers!=[]:
+            f.write("The Following Practices were 1 standard deviation above the average: \n")
+            for upper in uppers:
+                f.write("{} ({})\n".format(upper,practice_dict[upper]))
+        if lowers!=[]:
+            f.write("The Following Practices were 1 standard deviation below the average: \n")
+            for lower in lowers:
+                f.write("{} ({})\n".format(lower,practice_dict[lower]))    
     print("File saved as 'Stats for {} - {} ({}).txt'".format(selected_date,bnf_name, bnf_id))
     close()
 
 def stats_GP():
     globals()['rootwindow'].withdraw()
     globals()['rootwindow'].quit()
-    gps=[GP for GP in data_dict.keys()]
-    selected_gp=drop_select(gps,"Select GP")
+    gps=["{} - {}".format(name,code) for name,code in practice_dict.items()]
+
+    selected=drop_select(gps,"Select GP")
+    selected_code,selected_gp=selected.split("-")[1].strip(), selected.split("-")[0].strip()
     gp_dict={}
     for GP, dicts in data_dict.items():
         if GP==selected_gp:
             for date, values in data_dict[GP].items():
                 gp_dict[date]=values["Percentage"]
-    values=sorted(gp_dict.items(), key=lambda kv:kv[1])
-    top_date, top=values[-1][0],values[-1][1]
-    low_date, low=values[0][0], values[0][1]
-    with open("Stats for {} - {} ({}).txt".format(selected_gp,bnf_name, bnf_id),"wt") as f:
-        f.write("The Month with the highest Prescription rate was {} with {}% \n".format(top_date,round(top,2)))
-        f.write("The Month with the lowest Prescription rate was {} with {}% \n".format(low_date,round(low,2)))
-    print("File saved as 'Stats for {} - {} ({}).txt'".format(selected_gp,bnf_name, bnf_id))
+    if gp_dict!={}:
+        values=sorted(gp_dict.items(), key=lambda kv:kv[1])
+        
+        top_date, top=values[-1][0],values[-1][1]
+        low_date, low=values[0][0], values[0][1]
+        total=0
+        for value in values:
+            total+=value[1]
+        stdev=statistics.stdev([value[1] for value in values])    
+        average=total/len(values)
+        lower_lim=average-stdev
+        upper_lim=average+stdev
+        lowers=[]
+        uppers=[]
+        for value in values:
+            if value[1]>upper_lim:
+                uppers+=[value[0]]
+            elif value[1]<lower_lim:
+                lowers+=[value[0]]
+        with open("Stats for {} - {} ({}).txt".format(selected_gp,bnf_name, bnf_id),"wt") as f:
+            f.write("The Month with the highest Prescription rate was {} with {}% \n".format(top_date,round(top,2)))
+            f.write("The Month with the lowest Prescription rate was {} with {}% \n".format(low_date,round(low,2)))
+            if uppers!=[]:
+                f.write("The Following Months were 1 standard deviation above the average for this Practice: \n")
+                for upper in uppers:
+                    f.write("{}\n".format(upper))
+            if lowers!=[]:
+                f.write("The Following Months were 1 standard deviation below the average for this Practice: \n")
+                for lower in lowers:
+                    f.write("{}\n".format(lower))
+        print("File saved as 'Stats for {} ({}) - {} ({}).txt'".format(selected_gp,selected_code,bnf_name, bnf_id))
+    else:
+        print("No Data Availible for this Practice")
     close()
 
 def stats():
@@ -194,8 +250,6 @@ def stats():
     Tkinter.Button(rootwindow, text="Analyse by Date", width=15, command=stats_date).grid(column=0, row=1, pady=10, padx=10)
     Tkinter.Button(rootwindow, text="Analyse by Practice", width=15, command=stats_GP).grid(column=1, row=1, pady=10, padx=10)
     rootwindow.mainloop()
-    print("STATS STUFF WILL GO HERE")
-    close()
     
 #saves name and id (id for searching, name for dispalying/putting title on graph)
 ccg_id, ccg_name=ccg_select()
@@ -207,10 +261,12 @@ print("Collecting Data about {} (BNF - {}) in {}".format(bnf_name, bnf_id, ccg_n
 request="https://openprescribing.net/api/1.0/spending_by_practice/?format=json&code={}&org={}".format(bnf_id, ccg_id)
 json_obj=restrequest(request)
 data_dict={}
-
+practice_dict={}
 #stores in dict of {"PRACTICE1":{"DATE1":{"Items_Prescribed":"Number1"}, "DATE2:{"Items_Prescribed":"Number2"}....}, "PRACTICE2":{"DATE1":{"Items_Prescribed":"Number1"}, "DATE2:{"Items_Prescribed":"Number2"}....}....}
 #ZEROS DO NOT APPEAR IN THE JSON DATA
 for entry in json_obj:
+    if entry["row_name"] not in practice_dict.keys():
+        practice_dict[entry["row_name"]]=entry["row_id"]
     if entry["row_name"] not in data_dict.keys():
         data_dict[entry["row_name"]]={}
     if entry["date"] not in data_dict[entry["row_name"]]:
@@ -256,6 +312,8 @@ for GP, dicts in data_dict.items():
                 to_del[GP]=[]
             to_del[GP]+=[date]
 for GP,dates in to_del.items():
+    if GP in practice_dict.keys():
+        del(practice_dict[GP])
     for date in dates:
         del(data_dict[GP][date])
 
