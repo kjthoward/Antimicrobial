@@ -1,0 +1,22 @@
+The Month with the highest Prescription rate was 2014-12-01 with 12.53 per 100 patients 
+The Month with the lowest Prescription rate was 2016-08-01 with 4.52 per 100 patients 
+The Average Presection rate was 6.84 per 100 PatientsThe Following Months were 1 standard deviation above the average for this Practice: 
+2018-01-01
+2015-03-01
+2016-12-01
+2018-10-01
+2014-10-01
+2018-12-01
+2015-01-01
+2016-10-01
+2014-12-01
+The Following Months were 1 standard deviation below the average for this Practice: 
+2016-08-01
+2017-08-01
+2015-08-01
+2016-07-01
+2018-04-01
+2018-05-01
+2016-09-01
+2018-09-01
+2016-06-01

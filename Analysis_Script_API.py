@@ -10,6 +10,10 @@ from matplotlib import pyplot
 import tkinter as Tkinter
 import tkinter.filedialog as tkFileDialog
 
+#set to true to load data from pre-saved JSONs (22/11/2019) for testing
+test=False
+
+
 #Sets the title of the cmd window (checks if windows as gives warning on Linux)
 if os.name.upper()=="NT":
     os.system("title Open Prescribing Data Analyser")
@@ -82,9 +86,9 @@ def ccg_select():
         if len(json_obj)==0:
             print("No Valid Items Found")
         elif len(json_obj)>1:
-            OPTIONS=["{} - {}".format(entry["name"],entry["id"]) for entry in json_obj]
+            OPTIONS=["{} ~ {}".format(entry["name"],entry["id"]) for entry in json_obj]
             ccg=drop_select(OPTIONS, "Select CCG")
-            return ccg.split("-")[1].strip(), ccg.split("-")[0].strip()
+            return ccg.split("~")[1].strip(), ccg.split("~")[0].strip()
         elif len(json_obj)==1:
             ccg_id=json_obj[0]["code"]
             ccg_name=json_obj[0]["name"]
@@ -107,26 +111,27 @@ def drug_select():
             return drug_id,drug_name
         else:
             #Only allows items that are 'BNF Section' as future JSON search relies on this value
-            OPTIONS=["{} _ {}".format(entry["name"],entry["id"]) for entry in json_obj if entry["type"]=="BNF section"]
+            OPTIONS=["{} ~ {}".format(entry["name"],entry["id"]) for entry in json_obj if entry["type"]=="BNF section"]
             if len(OPTIONS)==1:
-                return OPTIONS[0].split("_")[1].strip(), OPTIONS[0].split("_")[0].strip()
+                return OPTIONS[0].split("~")[1].strip(), OPTIONS[0].split("~")[0].strip()
             elif len(OPTIONS)==0:
                 print("No Valid Items Found")
             else:
                 drug=drop_select(OPTIONS,"Select BNF Name")
-                return drug.split("_")[1].strip(), drug.split("_")[0].strip()
+                return drug.split("~")[1].strip(), drug.split("~")[0].strip()
 
 #Prompts the user to select a GP Practice and makes a trend plot overtime
 def trends():
     rootwindow.withdraw()
     rootwindow.quit()
     #Gets a sorted list of options for the dropdown showing practice name and code
-    gps=["{} - {}".format(name,code) for name,code in practice_dict.items()]
+    gps=["{} ~ {}".format(name,code) for name,code in practice_dict.items()]
     selected=drop_select(gps,"Select GP Practice", True)
-    practice=selected.split("-")[0].strip()
-    if practice=="_ALL_":
+    practice=selected.split("~")[0].strip()
+    if selected=="_ALL_":
+        gps.remove("_ALL_")
         for GP in sorted(gps):
-            plot(GP)
+            plot(GP.split("~")[0].strip())
     else:
         plot(practice)
     close()
@@ -157,9 +162,9 @@ def stats_date():
                 dates+=[date]
     #selects a date (if "_ALL_" all dates are used with the "_ALL_" removed from the list)
     selected_dates=[drop_select(dates,"Select Date",True)]
-    if select_dates==["_ALL_"]:
-        selected_dates=dates.remove("_ALL_")
-
+    if selected_dates==["_ALL_"]:
+        selected_dates=dates
+        selected_dates.remove("_ALL_")
     for selected_date in selected_dates:
         date_dict={}
         #Creates dict of GP:Rate for that date
@@ -189,8 +194,9 @@ def stats_date():
                 lowers+=[value[0]]
         #writes info to text file
         with open("Stats for {} - {} ({}).txt".format(selected_date,bnf_name, bnf_id),"wt") as f:
-            f.write("The Practice with the highest Prescription rate was {} ({}) with {}% \n".format(top_name,practice_dict[top_name],round(top,2)))
-            f.write("The Practice with the lowest Prescription rate was {} ({}) with {}% \n".format(low_name,practice_dict[low_name],round(low,2)))
+            f.write("The Practice with the highest Prescription rate was {} ({}) with {} per 100 Patients \n".format(top_name,practice_dict[top_name],round(top,2)))
+            f.write("The Practice with the lowest Prescription rate was {} ({}) with {} per 100 Patients \n".format(low_name,practice_dict[low_name],round(low,2)))
+            f.write("The Average Presection rate was {} per 100 Patients".format(round(average,2)))
             if uppers!=[]:
                 f.write("The Following Practices were 1 standard deviation above the average: \n")
                 for upper in uppers:
@@ -203,13 +209,13 @@ def stats_date():
     close()
 
 def stats_GP():
-    gps=["{} - {}".format(name,code) for name,code in practice_dict.items()]
+    gps=["{} ~ {}".format(name,code) for name,code in practice_dict.items()]
 
     selected=drop_select(gps,"Select GP",True)
     if selected=="_ALL_":
         selected=[name for name in practice_dict.keys()]
     else:
-        selected=[selected.split("-")[0].strip()]
+        selected=[selected.split("~")[0].strip()]
     for selected_gp in selected:
         gp_dict={}
         for GP, dicts in data_dict.items():
@@ -238,6 +244,7 @@ def stats_GP():
             with open("Stats for {} - {} ({}).txt".format(selected_gp,bnf_name, bnf_id),"wt") as f:
                 f.write("The Month with the highest Prescription rate was {} with {} per 100 patients \n".format(top_date,round(top,2)))
                 f.write("The Month with the lowest Prescription rate was {} with {} per 100 patients \n".format(low_date,round(low,2)))
+                f.write("The Average Presection rate was {} per 100 Patients".format(round(average,2)))
                 if uppers!=[]:
                     f.write("The Following Months were 1 standard deviation above the average for this Practice: \n")
                     for upper in uppers:
@@ -270,16 +277,29 @@ def stats():
     Tkinter.Button(rootwindow, text="Analyse by Date", width=15, command=date).grid(column=0, row=1, pady=10, padx=10)
     Tkinter.Button(rootwindow, text="Analyse by Practice", width=15, command=GP).grid(column=1, row=1, pady=10, padx=10)
     rootwindow.mainloop()
+
+if test==False:
+    #saves name and id (id for searching, name for dispalying/putting title on graph)
+    ccg_id, ccg_name=ccg_select()
+    bnf_id,bnf_name=drug_select()
+    print("Collecting Data about {} (BNF - {}) in {}".format(bnf_name, bnf_id, ccg_name))
+    #gets json of drug code for that ccg
+    request="https://openprescribing.net/api/1.0/spending_by_practice/?format=json&code={}&org={}".format(bnf_id, ccg_id)
+    json_obj=restrequest(request)
     
-#saves name and id (id for searching, name for dispalying/putting title on graph)
-ccg_id, ccg_name=ccg_select()
-bnf_id,bnf_name=drug_select()
-
-
-print("Collecting Data about {} (BNF - {}) in {}".format(bnf_name, bnf_id, ccg_name))
-#gets json of drug code for that ccg
-request="https://openprescribing.net/api/1.0/spending_by_practice/?format=json&code={}&org={}".format(bnf_id, ccg_id)
-json_obj=restrequest(request)
+elif test==True:
+    if not os.path.exists(os.path.join(os.getcwd(),"Test","Test_Data","Prescription_data.json")):
+        print("Test data not found")
+        print("Please place 'Prescription_data.json' in {}".format(os.path.join(os.getcwd(),"Test","Test_Data")))
+        close()
+    else:
+        print("Loading test data 'Prescription_data.json'")
+        with open(os.path.join(os.getcwd(),"Test", "Test_Data","Prescription_data.json"), "rt") as jsonf:
+            json_obj=json.load(jsonf)
+        ccg_id="14L"
+        ccg_name="Manchester"
+        bnf_id="5.1"
+        bnf_name="Antibacterial Drugs"
 data_dict={}
 practice_dict={}
 #stores in dict of {"PRACTICE1":{"DATE1":{"Items_Prescribed":"Number1"}, "DATE2:{"Items_Prescribed":"Number2"}....}, "PRACTICE2":{"DATE1":{"Items_Prescribed":"Number1"}, "DATE2:{"Items_Prescribed":"Number2"}....}....}
@@ -297,8 +317,18 @@ for entry in json_obj:
 #to get correct values (as this script will be general for all drugs could pick wrong star-pu so total pop is safer
 #Adds population data and calculates Prescription per 100 patients and adds it to {"PRACTICE1":{"DATE1":...}} entry so now it's
 #{"PRACTICE1":{"DATE1":{"Items_Prescribed":Number1", "Population":"Pop Number", "Rate":"Rate Number"}....}}
-request="https://openprescribing.net/api/1.0/org_details/?format=json&org_type=practice&org={}&keys=total_list_size".format(ccg_id)
-json_obj=restrequest(request)
+if test==False:
+    request="https://openprescribing.net/api/1.0/org_details/?format=json&org_type=practice&org={}&keys=total_list_size".format(ccg_id)
+    json_obj=restrequest(request)
+if test==True:
+    if not os.path.exists(os.path.join(os.getcwd(),"Test", "Test_Data","Size_data.json")):
+        print("Test data not found")
+        print("Please place 'Size_data.json' in {}".format(os.path.join(os.getcwd(),"Test", "Test_Data")))
+        close()
+    else:
+        print("Loading test data 'Size_data.json'")
+        with open(os.path.join(os.getcwd(),"Test", "Test_Data","Size_data.json"), "rt") as jsonf:
+            json_obj=json.load(jsonf)
 zero_values={}
 for entry in json_obj:
     try:
@@ -319,7 +349,6 @@ if len(zero_values.keys())!=0:
            zero_text.write("{}\n".format(date)) 
     zero_text.close()
 
-    
 zero_pop={}
 to_del={}
 #removes data that is not complete and writes the GP/date to a file (seperate to_del dict used as can't delete
