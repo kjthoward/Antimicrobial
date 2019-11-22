@@ -20,13 +20,15 @@ Practices with no population or no prescription data are filtered out and listed
 Population and prescription data with no missing values are merged on practices (practice IDs) and used for further analysis
 
 3. Choose whether to see trends or statistical analysis
-3.1. Choose which practice (or all) to see trends for
+	1. Choose which practice (or all) to see trends for
         Output is a png of the graph showing prescription over time for the selected practice
-3.2. Choose whether to see stats by date or by practice:
+.	
+	2. Choose whether to see stats by date or by practice:
         Select date/practice from dropdown list (option to select all included)
         Output is a .txt file containing practice/date with the
-* highest, lowest, mean prescription rate
-* as well as those that are +/- 1 standard deviation from the mean
+        
+		* highest, lowest, mean prescription rate
+		* as well as those that are +/- 1 standard deviation from the mean
 
 To test the script:
 -------------------------
