@@ -34,7 +34,7 @@ def restrequest(rawrequest, COUNT=0):
     except:
         time.sleep(COUNT)
         COUNT+=1
-        if count>10:
+        if COUNT>10:
             print("Too many attempts made, please try again later")
             close()
         restrequest(rawrequest, COUNT=COUNT)
