@@ -9,10 +9,10 @@ import time
 from matplotlib import pyplot
 import tkinter as Tkinter
 import tkinter.filedialog as tkFileDialog
+import pandas as pd
 
 #set to true to load data from pre-saved JSONs (22/11/2019) for testing
 test=False
-
 
 #Sets the title of the cmd window (checks if windows as gives warning on Linux)
 if os.name.upper()=="NT":
@@ -153,6 +153,26 @@ def plot(practice):
     else:
         print("Data not availible for {} ({})".format(practice,practice_dict[practice]))
 
+def stats():
+    globals()['rootwindow'].withdraw()
+    globals()['rootwindow'].quit()
+    rootwindow = Tkinter.Tk()
+    rootwindow.title("Select Function")
+    rootwindow.attributes("-topmost",True)
+    print("Select Function")
+    def GP():
+        rootwindow.withdraw()
+        rootwindow.quit()
+        stats_GP()
+    def date():
+        rootwindow.withdraw()
+        rootwindow.quit()
+        stats_date()
+    Tkinter.Label(rootwindow, text="Select Function").grid(column=0, row=0, columnspan=2, padx=10, pady=5)
+    Tkinter.Button(rootwindow, text="Analyse by Date", width=15, command=date).grid(column=0, row=1, pady=10, padx=10)
+    Tkinter.Button(rootwindow, text="Analyse by Practice", width=15, command=GP).grid(column=1, row=1, pady=10, padx=10)
+    rootwindow.mainloop()
+
 def stats_date():
     #gets an array of all unique dates
     dates=[]
@@ -194,15 +214,15 @@ def stats_date():
                 lowers+=[value[0]]
         #writes info to text file
         with open("Stats for {} - {} ({}).txt".format(selected_date,bnf_name, bnf_id),"wt") as f:
-            f.write("The Practice with the highest Prescription rate was {} ({}) with {} per 100 Patients \n".format(top_name,practice_dict[top_name],round(top,2)))
-            f.write("The Practice with the lowest Prescription rate was {} ({}) with {} per 100 Patients \n".format(low_name,practice_dict[low_name],round(low,2)))
-            f.write("The Average Presection rate was {} per 100 Patients".format(round(average,2)))
+            f.write("The Practice with the highest Prescription rate was {} ({}) with {} per 100 patients \n".format(top_name,practice_dict[top_name],round(top,2)))
+            f.write("The Practice with the lowest Prescription rate was {} ({}) with {} per 100 patients \n".format(low_name,practice_dict[low_name],round(low,2)))
+            f.write("The Average Presection rate was {} per 100 Patients \n".format(round(average,2)))
             if uppers!=[]:
-                f.write("The Following Practices were 1 standard deviation above the average: \n")
+                f.write("The Following Practices were more than 1 standard deviation above the average: \n")
                 for upper in uppers:
                     f.write("{} ({})\n".format(upper,practice_dict[upper]))
             if lowers!=[]:
-                f.write("The Following Practices were 1 standard deviation below the average: \n")
+                f.write("The Following Practices were more than 1 standard deviation below the average: \n")
                 for lower in lowers:
                     f.write("{} ({})\n".format(lower,practice_dict[lower]))    
         print("File saved as 'Stats for {} - {} ({}).txt'".format(selected_date,bnf_name, bnf_id))
@@ -210,7 +230,7 @@ def stats_date():
 
 def stats_GP():
     gps=["{} ~ {}".format(name,code) for name,code in practice_dict.items()]
-
+    #selects a GP (if "_ALL_" all dates are used with the "_ALL_" removed from the list)
     selected=drop_select(gps,"Select GP",True)
     if selected=="_ALL_":
         selected=[name for name in practice_dict.keys()]
@@ -224,7 +244,6 @@ def stats_GP():
                     gp_dict[date]=values["Rate"]
         if gp_dict!={}:
             values=sorted(gp_dict.items(), key=lambda kv:kv[1])
-            
             top_date, top=values[-1][0],values[-1][1]
             low_date, low=values[0][0], values[0][1]
             total=0
@@ -244,7 +263,7 @@ def stats_GP():
             with open("Stats for {} - {} ({}).txt".format(selected_gp,bnf_name, bnf_id),"wt") as f:
                 f.write("The Month with the highest Prescription rate was {} with {} per 100 patients \n".format(top_date,round(top,2)))
                 f.write("The Month with the lowest Prescription rate was {} with {} per 100 patients \n".format(low_date,round(low,2)))
-                f.write("The Average Presection rate was {} per 100 Patients".format(round(average,2)))
+                f.write("The Average Presection rate was {} per 100 Patients \n".format(round(average,2)))
                 if uppers!=[]:
                     f.write("The Following Months were 1 standard deviation above the average for this Practice: \n")
                     for upper in uppers:
@@ -258,28 +277,9 @@ def stats_GP():
             print("No Data Availible for this Practice: {} ({})".format(selected_gp, practice_dict[selected_gp]))
     close()
 
-def stats():
-    globals()['rootwindow'].withdraw()
-    globals()['rootwindow'].quit()
-    rootwindow = Tkinter.Tk()
-    rootwindow.title("Select Function")
-    rootwindow.attributes("-topmost",True)
-    print("Select Function")
-    def GP():
-        rootwindow.withdraw()
-        rootwindow.quit()
-        stats_GP()
-    def date():
-        rootwindow.withdraw()
-        rootwindow.quit()
-        stats_date()
-    Tkinter.Label(rootwindow, text="Select Function").grid(column=0, row=0, columnspan=2, padx=10, pady=5)
-    Tkinter.Button(rootwindow, text="Analyse by Date", width=15, command=date).grid(column=0, row=1, pady=10, padx=10)
-    Tkinter.Button(rootwindow, text="Analyse by Practice", width=15, command=GP).grid(column=1, row=1, pady=10, padx=10)
-    rootwindow.mainloop()
-
+#Get json obtained via API, based on user selection
 if test==False:
-    #saves name and id (id for searching, name for dispalying/putting title on graph)
+    #saves name and id from user selection (id for searching, name for dispalying/putting title on graph)
     ccg_id, ccg_name=ccg_select()
     bnf_id,bnf_name=drug_select()
     print("Collecting Data about {} (BNF - {}) in {}".format(bnf_name, bnf_id, ccg_name))
@@ -287,6 +287,7 @@ if test==False:
     request="https://openprescribing.net/api/1.0/spending_by_practice/?format=json&code={}&org={}".format(bnf_id, ccg_id)
     json_obj=restrequest(request)
     
+#Get json from archived/ obtained via API for Manchester CCG and Antibacterial Drugs 5.1 
 elif test==True:
     if not os.path.exists(os.path.join(os.getcwd(),"Test","Test_Data","Prescription_data.json")):
         print("Test data not found")
@@ -300,6 +301,8 @@ elif test==True:
         ccg_name="Manchester"
         bnf_id="5.1"
         bnf_name="Antibacterial Drugs"
+
+#Load data in from json
 data_dict={}
 practice_dict={}
 #stores in dict of {"PRACTICE1":{"DATE1":{"Items_Prescribed":"Number1"}, "DATE2:{"Items_Prescribed":"Number2"}....}, "PRACTICE2":{"DATE1":{"Items_Prescribed":"Number1"}, "DATE2:{"Items_Prescribed":"Number2"}....}....}
@@ -313,10 +316,12 @@ for entry in json_obj:
         data_dict[entry["row_name"]][entry["date"]]={}
     data_dict[entry["row_name"]][entry["date"]]["Items_Prescribed"]=entry["items"]
 
-#gets population data NOTE - Population is total, not Star-pu adjusted as Star-pu is stored in way that will be very tricky
-#to get correct values (as this script will be general for all drugs could pick wrong star-pu so total pop is safer
+#gets population data. NOTE - Population is total, not Star-pu adjusted as Star-pu is stored in way that will be very tricky
+#to get correct values (as this script will be general for all drugs could pick wrong star-pu so total popilation is safer.
 #Adds population data and calculates Prescription per 100 patients and adds it to {"PRACTICE1":{"DATE1":...}} entry so now it's
 #{"PRACTICE1":{"DATE1":{"Items_Prescribed":Number1", "Population":"Pop Number", "Rate":"Rate Number"}....}}
+
+#Step 1: load population data from appropriate json
 if test==False:
     request="https://openprescribing.net/api/1.0/org_details/?format=json&org_type=practice&org={}&keys=total_list_size".format(ccg_id)
     json_obj=restrequest(request)
@@ -329,6 +334,8 @@ if test==True:
         print("Loading test data 'Size_data.json'")
         with open(os.path.join(os.getcwd(),"Test", "Test_Data","Size_data.json"), "rt") as jsonf:
             json_obj=json.load(jsonf)
+
+#Write out list of practices with no prescription data to file
 zero_values={}
 for entry in json_obj:
     try:
@@ -349,6 +356,7 @@ if len(zero_values.keys())!=0:
            zero_text.write("{}\n".format(date)) 
     zero_text.close()
 
+#Write out list of practices with no population data to file
 zero_pop={}
 to_del={}
 #removes data that is not complete and writes the GP/date to a file (seperate to_del dict used as can't delete
@@ -362,7 +370,7 @@ for GP, dicts in data_dict.items():
             if GP not in to_del.keys():
                 to_del[GP]=[]
             to_del[GP]+=[date]
-    
+   
 for GP,dates in to_del.items():
     for date in dates:
         del(data_dict[GP][date])
